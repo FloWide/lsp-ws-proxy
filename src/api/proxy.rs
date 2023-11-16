@@ -13,9 +13,15 @@ use crate::lsp;
 use super::with_context;
 
 #[derive(Debug, Clone)]
+pub struct LspCommand {
+    pub name: String,
+    pub cmd: Vec<String>
+}
+
+#[derive(Debug, Clone)]
 pub struct Context {
     /// One or more commands to start a Language Server.
-    pub commands: Vec<Vec<String>>,
+    pub commands: Vec<LspCommand>,
     /// Write file on save.
     pub sync: bool,
     /// Remap relative `source://` to absolute `file://`.
@@ -83,7 +89,7 @@ async fn connected(
     query: Option<Query>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let command = if let Some(query) = query {
-        if let Some(command) = ctx.commands.iter().find(|v| v[0] == query.name) {
+        if let Some(command) = ctx.commands.iter().find(|v| v.name == query.name) {
             command
         } else {
             // TODO Validate this earlier and reject, or close immediately.
@@ -96,14 +102,14 @@ async fn connected(
     } else {
         &ctx.commands[0]
     };
-    tracing::info!("starting {} in {}", command[0], ctx.cwd);
-    let mut server = Command::new(&command[0])
-        .args(&command[1..])
+    tracing::info!("starting {} in {}", command.name, ctx.cwd);
+    let mut server = Command::new(&command.cmd[0])
+        .args(&command.cmd[1..])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .kill_on_drop(true)
         .spawn()?;
-    tracing::debug!("running {}", command[0]);
+    tracing::debug!("running {}", command.cmd[0]);
 
     let mut server_send = lsp::framed::writer(server.stdin.take().unwrap());
     let mut server_recv = lsp::framed::reader(server.stdout.take().unwrap());

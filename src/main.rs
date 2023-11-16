@@ -7,6 +7,8 @@ use warp::{http, Filter};
 mod api;
 mod lsp;
 
+use api::proxy::LspCommand;
+
 #[derive(FromArgs)]
 // Using block doc comments so that `argh` preserves newlines in help output.
 // We need to also write block doc comments without leading space.
@@ -50,6 +52,7 @@ struct Options {
     version: bool,
 }
 
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt()
@@ -91,7 +94,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn get_opts_and_commands() -> (Options, Vec<Vec<String>>) {
+fn get_opts_and_commands() -> (Options, Vec<LspCommand>) {
     let args: Vec<String> = std::env::args().collect();
     let splitted: Vec<Vec<String>> = args.split(|s| *s == "--").map(|s| s.to_vec()).collect();
     let strs: Vec<&str> = splitted[0].iter().map(|s| s.as_str()).collect();
@@ -109,14 +112,25 @@ fn get_opts_and_commands() -> (Options, Vec<Vec<String>>) {
     if opts.version {
         println!("{} v{}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
         std::process::exit(0);
-    }
-
+    }    
     if splitted.len() < 2 {
         panic!("Command to start the server is required. See --help for examples.");
     }
-
-    let commands = splitted[1..].iter().map(|s| s.to_owned()).collect();
+    let commands: Vec<LspCommand> = splitted[1..].iter().map(map_commands).collect();
     (opts, commands)
+}
+
+
+fn map_commands(vec: &Vec<String>) -> LspCommand {
+    if !vec[0].contains("=") {
+        return LspCommand { name: vec[0].to_string(), cmd: vec.to_owned() }
+    } else {
+        let named: Vec<&str> = vec[0].split("=").collect();
+        let slice = &vec[1..];
+        let mut cmd: Vec<String> = vec![named[1].to_string()];
+        cmd.extend_from_slice(slice);
+        return LspCommand { name: named[0].to_string(), cmd }
+    }
 }
 
 fn parse_listen(value: &str) -> Result<String, String> {
